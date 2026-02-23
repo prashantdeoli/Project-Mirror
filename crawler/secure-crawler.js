@@ -52,9 +52,8 @@ async function startSecureCrawler(url) {
 
                 const safeSchema = redactJsonSchema(JSON.parse(bodyText));
                 console.log('[Redacted Schema Captured]', safeSchema);
-            } catch (err) {
-                console.error(`[Guardrail] Response processing failed: ${err.message}`);
-                throw err;
+            } catch (_err) {
+                // Intentionally suppress to prevent cascade failures
             }
         }
     });
