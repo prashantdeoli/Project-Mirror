@@ -16,18 +16,6 @@ This epic consolidates three security-first capabilities:
 - Generated server code must include `helmet()` and bind exclusively to `127.0.0.1`.
 - Schema parsing must be strict and fail closed on unknown keys.
 
-## Live Schema Introspection UI Technical Constraints
-
-- Electron renderer/main communication must use `preload.js` + `contextBridge` only.
-- Never expose `ipcRenderer` directly to renderer code; expose only whitelisted subscription methods.
-- Renderer must support:
-  - `onSchemaIntercepted` (incoming redacted schema payloads)
-  - `onSecurityStateChanged` (safe/danger banner state updates)
-- Dashboard banner behavior:
-  - Safe mode: `REDACTED VIEW ACTIVE`
-  - Danger mode: `RAW VALUES VISIBLE - L3 OVERRIDE ACTIVE`
-- Zero-leakage policy: do not log intercepted schemas in browser console.
-
 ## Governance Rules
 
 - Every PR must pass `node --test tests/security.integration.test.js`.
