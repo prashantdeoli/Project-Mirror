@@ -19,6 +19,17 @@
    - Malformed blocked payloads are structurally fingerprinted.
    - Fingerprints are appended to canonical policy as `knownBadFingerprints`.
 
+4. **Intelligent Dashboard Integration (Context-Isolated IPC)**
+   - UI remains a display-only terminal for pre-sanitized backend intelligence.
+   - `electron/preload.js` must expose only whitelisted listeners:
+     - `onSchemaIntercepted`
+     - `onSecurityStateChanged`
+     - `onCriticalAutoFix`
+   - Dashboard rendering behavior:
+     - Smart-masked strings rendered in cyan.
+     - Fail-closed `[CONFIDENTIAL_*]` strings rendered in orange warning style.
+     - `LEVEL_4_CRITICAL_AUTO_FIX` event displayed via persistent alert banner.
+
 ## Operational AI Prompt
 
 > "You are the Lead AI Security Architect for Project Mirror v4.0. Your mandate is to design autonomous, self-healing security modules.

@@ -10,4 +10,8 @@ contextBridge.exposeInMainWorld('mirrorAPI', {
     onSecurityStateChanged: (callback) => {
         ipcRenderer.on('security-state-changed', (_event, bannerState) => callback(bannerState));
     },
+    // Listen for v4 critical self-healing events
+    onCriticalAutoFix: (callback) => {
+        ipcRenderer.on('critical-auto-fix', (_event, auditData) => callback(auditData));
+    },
 });

@@ -566,6 +566,7 @@ test('Sprint 2 preload bridge exposes only whitelisted mirrorAPI subscriptions',
     assert.equal(Object.prototype.hasOwnProperty.call(exposed, 'mirrorAPI'), true);
     assert.equal(typeof exposed.mirrorAPI.onSchemaIntercepted, 'function');
     assert.equal(typeof exposed.mirrorAPI.onSecurityStateChanged, 'function');
+    assert.equal(typeof exposed.mirrorAPI.onCriticalAutoFix, 'function');
     assert.equal(Object.prototype.hasOwnProperty.call(exposed.mirrorAPI, 'ipcRenderer'), false);
 
     let schemaSeen;
@@ -581,6 +582,13 @@ test('Sprint 2 preload bridge exposes only whitelisted mirrorAPI subscriptions',
     });
     channelHandlers['security-state-changed']({}, { level: 'danger', message: 'RAW VALUES VISIBLE - L3 OVERRIDE ACTIVE' });
     assert.deepEqual(bannerSeen, { level: 'danger', message: 'RAW VALUES VISIBLE - L3 OVERRIDE ACTIVE' });
+
+    let autoFixSeen;
+    exposed.mirrorAPI.onCriticalAutoFix((payload) => {
+        autoFixSeen = payload;
+    });
+    channelHandlers['critical-auto-fix']({}, { reason: 'SELF_HEAL_APPLIED' });
+    assert.deepEqual(autoFixSeen, { reason: 'SELF_HEAL_APPLIED' });
 });
 
 test('Sprint 2 dashboard source contains zero schema payload console logging', () => {
@@ -591,7 +599,11 @@ test('Sprint 2 dashboard source contains zero schema payload console logging', (
     assert.equal(dashboardSource.includes('console.dir('), false);
     assert.equal(dashboardSource.includes('onSchemaIntercepted'), true);
     assert.equal(dashboardSource.includes('onSecurityStateChanged'), true);
+    assert.equal(dashboardSource.includes('onCriticalAutoFix'), true);
     assert.equal(dashboardSource.includes('REDACTED VIEW ACTIVE'), true);
+    assert.equal(dashboardSource.includes('LEVEL 4 AUTO-REMEDIATION EXECUTED'), true);
+    assert.equal(dashboardSource.includes('text-orange-400'), true);
+    assert.equal(dashboardSource.includes('text-cyan-400'), true);
 });
 
 test('Sprint 2 backend-scaffolder-v3 writes hardened localhost Express scaffold on valid schema', () => {
