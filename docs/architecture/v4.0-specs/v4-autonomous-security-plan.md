@@ -18,6 +18,9 @@
 3. **Threat-Intelligence Sync**
    - Malformed blocked payloads are structurally fingerprinted.
    - Fingerprints are appended to canonical policy as `knownBadFingerprints`.
+   - Publishing is cryptographically gated by L3 RS256 JWT verification.
+   - Fingerprint objects are validated with strict Zod schema before append.
+   - Unauthorized publish or invalid schema must fail closed and terminate.
 
 4. **Intelligent Dashboard Integration (Context-Isolated IPC)**
    - UI remains a display-only terminal for pre-sanitized backend intelligence.
@@ -44,3 +47,14 @@
 ```bash
 node --test tests/security.integration.test.js
 ```
+
+## Threat Publisher Module Contract
+
+- Module: `sprint4/threat-publisher.js`
+- Required input object schema:
+  - `hash`: 64-char SHA-256 hex string
+  - `reason`: non-trivial reason string
+  - `timestamp`: ISO datetime string
+- Strict validation via `z.object(...).strict()` to prevent feed poisoning.
+- Auth gate: valid L3 RS256 token required prior to policy mutation.
+- Atomic read-append-write semantics: no audit success event without successful write.

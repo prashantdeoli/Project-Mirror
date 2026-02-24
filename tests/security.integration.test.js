@@ -1045,3 +1045,179 @@ test('Sprint 4 self-heal restores canonical policy and threat sync appends finge
     assert.equal(typeof policyWritten, 'string');
     assert.equal(policyWritten.includes(fp), true);
 });
+
+test('Sprint 4 threat publisher appends validated fingerprint with L3 auth and audit log', () => {
+    let policyData = {
+        policyVersion: '3.0.0',
+        redactionMode: 'type-only',
+        blockedMethods: ['POST', 'PUT', 'PATCH', 'DELETE'],
+        knownBadFingerprints: [],
+    };
+
+    const auditWrites = [];
+    const fsMock = {
+        readFileSync() {
+            return JSON.stringify(policyData);
+        },
+        writeFileSync(_path, content) {
+            policyData = JSON.parse(content);
+        },
+        appendFileSync(_path, content) {
+            auditWrites.push(content);
+        },
+    };
+
+    const { publishThreatFingerprint } = loadWithMocks('sprint4/threat-publisher.js', {
+        fs: fsMock,
+        jsonwebtoken: {
+            verify(token, publicKey, opts) {
+                assert.equal(token, 'valid.jwt.token');
+                assert.match(publicKey, /BEGIN PUBLIC KEY/);
+                assert.deepEqual(opts, { algorithms: ['RS256'] });
+                return { role: 'admin' };
+            },
+        },
+        zod: {
+            z: {
+                object() {
+                    return {
+                        strict() {
+                            return {
+                                parse(v) {
+                                    const allowed = ['hash', 'reason', 'timestamp'];
+                                    for (const key of Object.keys(v || {})) {
+                                        if (!allowed.includes(key)) throw new Error('invalid key');
+                                    }
+                                    if (typeof v.hash !== 'string' || v.hash.length !== 64) throw new Error('invalid hash');
+                                    return v;
+                                },
+                            };
+                        },
+                    };
+                },
+                string() {
+                    return {
+                        length() {
+                            return {};
+                        },
+                        min() {
+                            return {};
+                        },
+                        datetime() {
+                            return {};
+                        },
+                    };
+                },
+            },
+        },
+    });
+
+    const result = publishThreatFingerprint(
+        {
+            hash: 'a'.repeat(64),
+            reason: 'Blocked malicious schema',
+            timestamp: new Date().toISOString(),
+        },
+        'valid.jwt.token',
+        '-----BEGIN PUBLIC KEY-----\nMOCK\n-----END PUBLIC KEY-----',
+        'docs/architecture/v3.0-specs/policy-sync.json'
+    );
+
+    assert.equal(result, true);
+    assert.equal(policyData.knownBadFingerprints.length, 1);
+    assert.equal(policyData.knownBadFingerprints[0].hash, 'a'.repeat(64));
+    assert.equal(auditWrites.some((line) => line.includes('LEVEL_4_THREAT_PUBLISHED')), true);
+});
+
+test('Sprint 4 threat publisher fails closed on missing token and schema poisoning', () => {
+    const originalExit = process.exit;
+    let exitCode;
+    process.exit = (code) => {
+        exitCode = code;
+        throw new Error(`exit:${code}`);
+    };
+
+    try {
+        const { publishThreatFingerprint } = loadWithMocks('sprint4/threat-publisher.js', {
+            fs: {
+                readFileSync() {
+                    return JSON.stringify({ knownBadFingerprints: [] });
+                },
+                writeFileSync() {
+                    throw new Error('must not write');
+                },
+                appendFileSync() {},
+            },
+            jsonwebtoken: {
+                verify() {
+                    return { role: 'admin' };
+                },
+            },
+            zod: {
+                z: {
+                    object() {
+                        return {
+                            strict() {
+                                return {
+                                    parse(v) {
+                                        if (Object.prototype.hasOwnProperty.call(v, 'extra')) {
+                                            throw new Error('schema poisoning');
+                                        }
+                                        return v;
+                                    },
+                                };
+                            },
+                        };
+                    },
+                    string() {
+                        return {
+                            length() {
+                                return {};
+                            },
+                            min() {
+                                return {};
+                            },
+                            datetime() {
+                                return {};
+                            },
+                        };
+                    },
+                },
+            },
+        });
+
+        assert.throws(
+            () =>
+                publishThreatFingerprint(
+                    {
+                        hash: 'b'.repeat(64),
+                        reason: 'ok reason',
+                        timestamp: new Date().toISOString(),
+                    },
+                    '',
+                    '-----BEGIN PUBLIC KEY-----\nMOCK\n-----END PUBLIC KEY-----',
+                    'docs/architecture/v3.0-specs/policy-sync.json'
+                ),
+            /exit:1/
+        );
+        assert.equal(exitCode, 1);
+
+        assert.throws(
+            () =>
+                publishThreatFingerprint(
+                    {
+                        hash: 'b'.repeat(64),
+                        reason: 'ok reason',
+                        timestamp: new Date().toISOString(),
+                        extra: 'poison',
+                    },
+                    'valid.jwt.token',
+                    '-----BEGIN PUBLIC KEY-----\nMOCK\n-----END PUBLIC KEY-----',
+                    'docs/architecture/v3.0-specs/policy-sync.json'
+                ),
+            /exit:1/
+        );
+    } finally {
+        process.exit = originalExit;
+    }
+});
