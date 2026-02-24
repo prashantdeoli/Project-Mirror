@@ -32,6 +32,20 @@ function introspectSchemaView(jsonPayload, { isAdminOverride = false } = {}) {
     return isAdminOverride ? jsonPayload : redactJsonSchema(jsonPayload);
 }
 
+function getIntrospectionBannerState({ isAdminOverride = false } = {}) {
+    if (isAdminOverride) {
+        return {
+            level: 'danger',
+            message: 'RAW VALUES VISIBLE - L3 OVERRIDE ACTIVE',
+        };
+    }
+
+    return {
+        level: 'safe',
+        message: 'REDACTED VIEW ACTIVE',
+    };
+}
+
 const endpointSchema = z
     .object({
         path: z.string().startsWith('/'),
@@ -81,6 +95,7 @@ app.listen(PORT, '127.0.0.1', () => {
 
 module.exports = {
     createGhostMockRouter,
+    getIntrospectionBannerState,
     introspectSchemaView,
     generateFailClosedMirrorServer,
     redactJsonSchema,
