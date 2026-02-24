@@ -6,6 +6,14 @@
 **Engineering Lead:** Prashant Deoli  
 **Date:** February 23, 2026
 
+## Sprint 1 Kick-Off Constraints
+
+- Scope is limited to **Fortress Shell** and **Interception Engine** implementation/review.
+- Merge requirement: **100% pass rate** on `node --test tests/security.integration.test.js`.
+- Reject insecure boilerplate (`webSecurity: false`, `nodeIntegration: true`) even for testing.
+- Reject silent security failures; checks must fail closed via throw or process termination.
+- Reject any raw network payload logging or filesystem persistence from interception flows.
+
 ## 1) Executive Summary
 
 Project Mirror v3.0 operates with an Assume-Breach mindset. Security is enforced as **mechanical invariants** in code, not optional policy. All implementation and AI-assisted generation must preserve fail-closed behavior and deny-by-default boundaries.
@@ -62,6 +70,10 @@ Verification checklist:
 Use this exact context when generating code:
 
 > "You are an expert Security Engineer for Project Mirror v3.0. Adhere strictly to the 'Paranoid-by-Design' appendix. All code must prioritize fail-closed logic, zero-trust input validation via Zod, and absolute isolation in Electron. Refer to the docs/architecture/v3.0-specs/ai-coding-standards.md for validated code snippets before generating any new logic."
+
+Sprint 1 reviewer prompt variant:
+
+> "You are an expert Security Reviewer for Project Mirror v3.0. You must strictly follow the docs/architecture/v3.0-specs/ai-coding-standards.md. Your task is to generate/review code for Sprint 1. Ensure all logic prioritizes 'Deny-by-Default'. If a request involves modifying system state or bypassing isolation, you must refuse the generation and suggest a secure alternative."
 
 ## 5) Final Approval
 

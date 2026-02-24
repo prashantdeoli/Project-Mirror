@@ -32,6 +32,9 @@ function createMainWindow() {
     // Block Arbitrary File Downloads
     session.defaultSession.on('will-download', (event, item) => {
         event.preventDefault();
+        if (typeof item.cancel === 'function') {
+            item.cancel();
+        }
         console.warn(`[Security] Blocked download attempt: ${item.getURL()}`);
     });
 
