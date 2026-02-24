@@ -1,0 +1,6 @@
+{
+  "policyVersion": "3.0.0",
+  "redactionMode": "type-only",
+  "blockedMethods": ["POST", "PUT", "PATCH", "DELETE"],
+  "knownBadFingerprints": []
+}
