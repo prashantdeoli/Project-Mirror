@@ -1,0 +1,3 @@
+private.pem
+public.pem
+scripts/mint-local-jwt.js
