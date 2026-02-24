@@ -1221,3 +1221,88 @@ test('Sprint 4 threat publisher fails closed on missing token and schema poisoni
         process.exit = originalExit;
     }
 });
+
+test('Sprint 5 headless interceptor blocks unmocked external requests in CI mode', async () => {
+    let routeHandler;
+    const context = {
+        async newPage() {
+            return {
+                async goto() {
+                    await routeHandler({
+                        request: () => ({ url: () => 'https://unmocked.external/api', method: () => 'GET' }),
+                        fulfill: async () => {},
+                        abort: async () => {},
+                    });
+                },
+            };
+        },
+        async route(_pattern, handler) {
+            routeHandler = handler;
+        },
+    };
+
+    const { runHeadlessCiInterceptor } = loadWithMocks('sprint5/headless-ci-interceptor.js', {
+        playwright: {
+            chromium: {
+                async launch() {
+                    return {
+                        async newContext() { return context; },
+                        async close() {},
+                    };
+                },
+            },
+        },
+    });
+
+    const originalExit = process.exit;
+    process.exit = (code) => { throw new Error(`exit:${code}`); };
+    try {
+        await assert.rejects(
+            () => runHeadlessCiInterceptor({ url: 'http://local.test', mockRegistry: {} }),
+            /exit:1/
+        );
+    } finally {
+        process.exit = originalExit;
+    }
+});
+
+test('Sprint 5 chaos engine raises P0 when invariant bypass is detected', () => {
+    const { runChaosCycle } = require('../sprint5/chaos-engine');
+    const result = runChaosCycle((payload) => ({ payload, passedUnexpectedly: payload.method === 'TRACE' }));
+    assert.equal(result.p0, true);
+    assert.equal(typeof result.fingerprint, 'string');
+    assert.equal(result.fingerprint.length, 64);
+});
+
+test('Sprint 5 SIEM telemetry queues events when mTLS endpoint fails', async () => {
+    const queuedWrites = [];
+    const { sendTelemetryOverMtls } = loadWithMocks('sprint5/siem-telemetry.js', {
+        fs: {
+            existsSync() { return false; },
+            readFileSync() { return '[]'; },
+            writeFileSync(_path, content) { queuedWrites.push(content); },
+        },
+        https: {
+            request(_endpoint, _opts, _cb) {
+                return {
+                    on(event, handler) {
+                        if (event === 'error') handler(new Error('mtls unavailable'));
+                    },
+                    write() {},
+                    end() {},
+                };
+            },
+        },
+    });
+
+    const result = await sendTelemetryOverMtls({
+        endpoint: 'https://siem.local/ingest',
+        event: { level: 'LEVEL_4_CRITICAL_AUTO_FIX' },
+        tlsOptions: { cert: 'c', key: 'k', ca: 'a' },
+    });
+
+    assert.equal(result.delivered, false);
+    assert.equal(result.queued, true);
+    assert.equal(queuedWrites.length, 1);
+    assert.equal(queuedWrites[0].includes('LEVEL_4_CRITICAL_AUTO_FIX'), true);
+});
