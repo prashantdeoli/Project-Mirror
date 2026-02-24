@@ -941,3 +941,95 @@ test('Sprint 3 policy sync validates canonical policy strictly and detects drift
     };
     assert.equal(detectPolicyDrift(localPolicy, canonical), true);
 });
+
+test('Sprint 4 heuristic masker returns semantic safe token when confidence >= 95%', () => {
+    const { heuristicMaskField } = loadWithMocks('sprint4/autonomous-security-engine.js', {
+        zod: {
+            z: {
+                object() {
+                    return { strict() { return { parse(v) { return v; } }; } };
+                },
+                string() { return {}; },
+                unknown() { return {}; },
+                enum() { return {}; },
+                array() { return { min() { return {}; }, optional() { return {}; } }; },
+            },
+        },
+    });
+
+    const out = heuristicMaskField({ key: 'authToken', value: 'aaa.bbb.ccc' });
+    assert.equal(out.failClosedFallback, false);
+    assert.equal(out.classification, 'jwt');
+    assert.equal(out.redacted, '[SAFE_JWT_TOKEN]');
+});
+
+test('Sprint 4 heuristic masker fails closed below threshold', () => {
+    const { heuristicMaskField } = loadWithMocks('sprint4/autonomous-security-engine.js', {
+        zod: {
+            z: {
+                object() {
+                    return { strict() { return { parse(v) { return v; } }; } };
+                },
+                string() { return {}; },
+                unknown() { return {}; },
+                enum() { return {}; },
+                array() { return { min() { return {}; }, optional() { return {}; } }; },
+            },
+        },
+    });
+
+    const out = heuristicMaskField({ key: 'nickname', value: 'Alice' });
+    assert.equal(out.failClosedFallback, true);
+    assert.match(out.redacted, /\[CONFIDENTIAL_STRING\]/);
+});
+
+test('Sprint 4 self-heal restores canonical policy and threat sync appends fingerprint', () => {
+    const appends = [];
+    let policyWritten;
+
+    const fsMock = {
+        appendFileSync(_path, content) {
+            appends.push(content);
+        },
+        readFileSync() {
+            return JSON.stringify({
+                policyVersion: '4.0.0',
+                redactionMode: 'type-only',
+                blockedMethods: ['POST', 'PUT', 'PATCH', 'DELETE'],
+                knownBadFingerprints: [],
+            });
+        },
+        writeFileSync(_path, content) {
+            policyWritten = content;
+        },
+    };
+
+    const { selfHealPolicy, appendKnownBadFingerprint } = loadWithMocks('sprint4/autonomous-security-engine.js', {
+        fs: fsMock,
+        zod: {
+            z: {
+                object() {
+                    return { strict() { return { parse(v) { return v; } }; } };
+                },
+                string() { return {}; },
+                unknown() { return {}; },
+                enum() { return {}; },
+                array() { return { min() { return {}; }, optional() { return {}; } }; },
+            },
+        },
+    });
+
+    const local = { policyVersion: '4.0.0', redactionMode: 'full-mask', blockedMethods: ['POST'], knownBadFingerprints: [] };
+    const canonical = { policyVersion: '4.0.0', redactionMode: 'type-only', blockedMethods: ['POST', 'PUT', 'PATCH', 'DELETE'], knownBadFingerprints: [] };
+
+    const healed = selfHealPolicy({ localPolicy: local, canonicalPolicy: canonical, l3Authorized: false });
+    assert.equal(healed.healed, true);
+    assert.equal(healed.policy.redactionMode, 'type-only');
+    assert.equal(appends.some((line) => line.includes('LEVEL_4_CRITICAL_AUTO_FIX')), true);
+
+    const fp = appendKnownBadFingerprint({ payload: { blocked: 'schema' }, policyPath: 'docs/architecture/v3.0-specs/policy-sync.json' });
+    assert.equal(typeof fp, 'string');
+    assert.equal(fp.length, 64);
+    assert.equal(typeof policyWritten, 'string');
+    assert.equal(policyWritten.includes(fp), true);
+});
